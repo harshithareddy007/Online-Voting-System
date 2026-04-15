@@ -342,11 +342,18 @@ def verify_otp(request):
     if request.method == "POST":
         entered_otp = request.POST.get("otp")
         if entered_otp == request.session.get('otp'):
-            return redirect('voting_page')
+            return redirect('face_verification')
         else:
             messages.error(request, "Invalid OTP.")
 
     return render(request, 'verify_otp.html')
+
+# Step 3: Face Verification (Simulated)
+def face_verification(request):
+    if request.method == "POST":
+        return redirect('voting_page')
+
+    return render(request, 'face_verification.html')
 
 # Step 4: Voting Page
 import uuid
