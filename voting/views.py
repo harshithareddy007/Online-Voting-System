@@ -267,7 +267,7 @@ def system_settings(request):
             ElectionLog.objects.all().delete()   # logs
             
             # optional (if you want full reset)
-            # Candidate.objects.all().delete()
+            Candidate.objects.all().delete()
 
             # reset election status
             Election.objects.all().update(is_active=False)
@@ -339,18 +339,52 @@ def voter_authentication(request):
 
 # Step 2: OTP Verification
 def verify_otp(request):
+
+    if not request.session.get('otp'):
+        return redirect('login')  # 🔒 direct access block
+
     if request.method == "POST":
-        entered_otp = request.POST.get("otp")
-        if entered_otp == request.session.get('otp'):
+
+        entered_otp = ''.join([
+            request.POST.get('otp1', '').strip(),
+            request.POST.get('otp2', '').strip(),
+            request.POST.get('otp3', '').strip(),
+            request.POST.get('otp4', '').strip(),
+            request.POST.get('otp5', '').strip(),
+            request.POST.get('otp6', '').strip(),
+        ])
+
+        original_otp = request.session.get('otp')
+
+        print("Entered OTP:", entered_otp)
+        print("Session OTP:", original_otp)
+
+        if len(entered_otp) != 6:
+            messages.error(request, "Enter complete OTP.")
+            return render(request, 'otp_verification.html')
+
+        if entered_otp == original_otp:
+            request.session.pop('otp', None)
+
+            # 🔥 ADD THIS FLAG
+            request.session['otp_verified'] = True
+
             return redirect('face_verification')
         else:
-            messages.error(request, "Invalid OTP.")
+            messages.error(request, "Invalid OTP")
 
-    return render(request, 'verify_otp.html')
+    return render(request, 'otp_verification.html')
 
-# Step 3: Face Verification (Simulated)
 def face_verification(request):
+
+    if not request.session.get('otp_verified'):
+        return redirect('login')  # 🔒 block direct access
+
     if request.method == "POST":
+
+        # 🔥 mark face verified
+        request.session['face_verified'] = True
+
         return redirect('voting_page')
 
     return render(request, 'face_verification.html')
@@ -358,44 +392,51 @@ def face_verification(request):
 # Step 4: Voting Page
 import uuid
 
-def voting_page(request):
-    voter_id = request.session.get('voter_id')
+from django.utils.timezone import now
 
-    if not voter_id:
+def voting_page(request):
+
+    voter_id = request.session.get('voter_id')
+    face_verified = request.session.get('face_verified')
+
+    if not voter_id or not face_verified:
         return redirect('login')
 
     voter = Voter.objects.get(id=voter_id)
+
+    # 🔐 Prevent multiple votes
+    if voter.has_voted:
+        return redirect('vote_success')
 
     if request.method == "POST":
         candidate_id = request.POST.get('candidate_id')
         candidate = Candidate.objects.get(id=candidate_id)
 
-        # Save vote
-        Vote.objects.create(voter=voter, candidate=candidate)
+        vote = Vote.objects.create(voter=voter, candidate=candidate)
 
         voter.has_voted = True
         voter.save()
 
-        # 🎯 Generate unique voting ID
         vote_id = str(uuid.uuid4())[:8].upper()
 
-        # Store in session
         request.session['vote_id'] = vote_id
+        request.session['vote_time'] = now().strftime("%d %b %Y, %I:%M %p")
 
         return redirect('vote_success')
 
     candidates = Candidate.objects.all()
     return render(request, 'voting_page.html', {'candidates': candidates})
 
-from django.utils import timezone   # ✅ TOP LEVEL
+from django.utils.timezone import localtime
 
 def vote_success(request):
-    vote_id = request.session.get('vote_id')
+    voter_id = request.session.get('voter_id')
 
-    request.session.pop('vote_id', None)
-    request.session.pop('voter_id', None)
+    vote = Vote.objects.get(voter_id=voter_id)
+
+    vote_time = localtime(vote.created_at).strftime("%d %b %Y, %I:%M %p")
 
     return render(request, 'vote_success.html', {
-        'vote_id': vote_id,
-        'time': timezone.now()   # ✅ CLEAN
+        'vote_id': request.session.get('vote_id'),
+        'vote_time': vote_time
     })

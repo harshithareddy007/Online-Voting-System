@@ -23,7 +23,7 @@ class Candidate(models.Model):
 class Vote(models.Model):
     voter = models.OneToOneField(Voter, on_delete=models.CASCADE)
     candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)  # 🔥 important
 
     def __str__(self):
         return f"{self.voter} voted for {self.candidate}"
